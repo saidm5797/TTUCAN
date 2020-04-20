@@ -44,3 +44,4 @@ class TTUCAN : protected IsoTp
 		//Attributes
 		struct Message_t TxMsg = 0x7FF, RxMsg = 0x7FF; //these are public so users can access the data buffers
 }
+#endif
