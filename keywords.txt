@@ -1,0 +1,30 @@
+#######################################
+# Syntax Coloring Map For CmdArduino
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+TTUCAN	KEYWORD1
+
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+TTU_begin	KEYWORD2
+send_Msg	KEYWORD2
+receive_Msg	KEYWORD2
+addFilter	KEYWORD2
+buildTransmitID	KEYWORD2
+buildReceiveID	KEYWORD2
+check_Receive	KEYWORD2
+check_Error	KEYWORD2
+homeMenu	KEYWORD2
+displayActivity	KEYWORD2
+networkStatus	KEYWORD2
+checkNodes	KEYWORD2
+pingNode	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
