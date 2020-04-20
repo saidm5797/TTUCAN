@@ -7,7 +7,7 @@
 #include <SPI.h>
 
 
-TTUCAN::TTUCAN(INT8U _CS, uint8_t mcp_int, INT32U _address, INT8U Ext) : IsoTP(_CS, mcp_int)
+TTUCAN::TTUCAN(INT8U _CS, uint8_t mcp_int, INT32U _address, INT8U Ext) : IsoTP(_CS, mcp_int, ext)
 {
 	if(Ext != 0 && Ext != 1){
 		Serial.println("ERROR: Ext must be either 0 or 1. CAN is not initialized!");
@@ -23,7 +23,7 @@ TTUCAN::TTUCAN(INT8U _CS, uint8_t mcp_int, INT32U _address, INT8U Ext) : IsoTP(_
 	}
 	
 	nodeAddress = _address;
-	_ext = Ext;
+	//_ext = Ext;
 	
 	if(!_ext){ //standard
 		numNodes=15; //don't include home node
@@ -42,10 +42,10 @@ TTUCAN::TTUCAN(INT8U _CS, uint8_t mcp_int, INT32U _address, INT8U Ext) : IsoTP(_
 }
 
 
-int TTUCAN::TTU_begin(){
+int TTUCAN::TTU_begin(INT8U idmodeset, INT8U speedset, INT8U clockset){
   // Initialize MCP2515 running at 16MHz with a baudrate of 500kb/s and the masks and filters disabled.
   if (nodeAddress == 15 || nodeAddress == 255){                      //create HOME node with no filters
-    if(begin(MCP_ANY, CAN_500KBPS, MCP_16MHZ) == CAN_OK)
+    if(begin(MCP_ANY, speedset, clockset) == CAN_OK)
       Serial.println("MCP2515 Initialized Successfully!");
     else
       Serial.println("Error Initializing MCP2515..."); 
@@ -59,7 +59,7 @@ int TTUCAN::TTU_begin(){
   //filters 3-5 can be changed to accept messages addressed to three other nodes (use add_filter() to chnage these filters)
   switch(_ext){
     case 0: //standard - 16 nodes max, numbered 0-15
-      if(begin(MCP_STD_ext, CAN_500KBPS, MCP_16MHZ) == CAN_OK)
+      if(begin(idmodeset, speedset, clockset) == CAN_OK)
         Serial.println("MCP2515 Initialized Successfully! - Standard");
       else
         Serial.println("Error Initializing MCP2515..."); 
@@ -132,7 +132,7 @@ int TTUCAN::addFilter(INT32U filterAddress, INT8U _ext, INT8U filterRegister){
   return 1; 
 }
 
-INT32U TTUCAN::buildMsgID(INT32U to_addr, INT32U descriptor){
+INT32U TTUCAN::buildTransmitID(INT32U to_addr, INT32U descriptor){
   if(_ext &&(to_addr > 255 || to_addr < 0)){
     Serial.println("ERROR: Adresses must be between 0-255 for _extended configuration.");
     return 0;
@@ -154,10 +154,12 @@ INT32U TTUCAN::buildMsgID(INT32U to_addr, INT32U descriptor){
   switch(_ext){
     case 0:
       msgID = (((to_addr << 27)|(nodeAddress << 23))|(descriptor << 20))>>20;
+	  TxMsg.rx_id = (((nodeAddress << 27)|(to_addr << 23))|(descriptor << 20))>>20; //received ID with FC frame will be adressed to this node with same descriptor
 	  return msgID;
       break;
     case 1:
       msgID = ((to_addr << 21)|(nodeAddress << 13))|(descriptor) | 0x80000000; //recognize as _extended frame
+	  TxMsg.rx_id = ((nodeAddress << 21)|(to_addr << 13))|(descriptor) | 0x80000000;
 	  return msgID;
       break;
     default:
@@ -167,52 +169,39 @@ INT32U TTUCAN::buildMsgID(INT32U to_addr, INT32U descriptor){
   
 }
 
-int TTUCAN::send_Msg(INT32U to_addr, INT8U rtr, INT32U descriptor, INT8U *data, INT32U len){
-  if(rtr != 0 && rtr != 1){
-    Serial.println("ERROR: rtr must be equal to 0 or 1. Message not sent!");
-    return 0;     
-  }
-  else if(_ext &&(to_addr > 255 || to_addr < 0)){
-    Serial.println("ERROR: Adresses must be between 0-255 for _extended configuration. Message not sent!");
+INT32U TTUCAN::buildReceiveID(INT32U from_addr, INT32U descriptor){
+  if(_ext &&(from_addr > 255 || from_addr < 0)){
+    Serial.println("ERROR: Adresses must be between 0-255 for _extended configuration.");
     return 0;
   }
-  else if(!_ext &&(to_addr > 15 || to_addr < 0)){
-    Serial.println("ERROR: Adresses must be between 0-15 for standard configuration. Message not sent!");
+  else if(!_ext &&(from_addr > 15 || from_addr < 0)){
+    Serial.println("ERROR: Adresses must be between 0-15 for standard configuration.");
     return 0;
   }
   else if(_ext &&(descriptor > 8191 || descriptor < 0)){
-    Serial.println("ERROR: Data descriptor value must be between 0-15 for standard configuration. Message not sent!");
+    Serial.println("ERROR: Data descriptor value must be between 0-15 for standard configuration.");
     return 0;
   }
   else if(!_ext &&(descriptor > 7 || descriptor < 0)){
-    Serial.println("ERROR: Data descriptor value must be between 0-15 for standard configuration. Message not sent!");
+    Serial.println("ERROR: Data descriptor value must be between 0-15 for standard configuration.");
     return 0;
   }
-
-  INT32U msgID; //CAN ID to be sent with message
+  //Create CAN ID to be sent with message
+  INT32U msgID; 
   switch(_ext){
     case 0:
-      msgID = (((to_addr << 27)|(nodeAddress << 23))|(descriptor << 20))>>20;
+      msgID = (((nodeAddress << 27)|(from_addr << 23))|(descriptor << 20))>>20;
+	  return msgID;
       break;
     case 1:
-      msgID = ((to_addr << 21)|(nodeAddress << 13))|(descriptor) | 0x80000000; //recognize as _extended frame
+      msgID = ((nodeAddress << 21)|(from_addr << 13))|(descriptor) | 0x80000000; //recognize as _extended frame
+	  return msgID;
       break;
     default:
       Serial.println("ERROR: _ext must be equal to 0 or 1. Message not sent!");
       return 0;    
-  }
-  if(rtr){
-    msgID |= 0x40000000; //write as remote request
-  }
-
-  byte sndStat = sendMsgBuf(msgID, len, data);
-  if(sndStat == CAN_OK){
-    Serial.println("Message Sent Successfully!");
-    return 1;
-  } else {
-    Serial.println("Error Sending Message...");
-    return 0;
-  }
+  }  
+  
 }
 
 int TTUCAN::send_Msg(INT32U msgID, INT8U rtr, INT8U *data, INT32U len){
@@ -220,26 +209,50 @@ int TTUCAN::send_Msg(INT32U msgID, INT8U rtr, INT8U *data, INT32U len){
     Serial.println("ERROR: rtr must be equal to 0 or 1. Message not sent!");
     return 0;     
   }
-  
+   
   if(rtr){
     msgID |= 0x40000000; //write as remote request
   }
-
+#ifdef ISOTP_COMM
+  TxMsg.len=sizeof(data);
+  TxMsg.Buffer=(uint8_t *)calloc(MAX_MSGBUF,sizeof(uint8_t));
+  TxMsg.tx_id=msgID;
+  memcpy(TxMsg.Buffer,data,sizeof(data));
+  Serial.println(F("Send..."));
+  send(&TxMsg); 
+#else
+  if(len > 8){
+	Serial.println("Error: Data array must be 8 bytes or less! Define ISOTP_COMM in TTUCAN.h to send larger arrays.");
+	return 0;
+  }
   byte sndStat = sendMsgBuf(msgID, len, data);
   if(sndStat == CAN_OK){
-    Serial.println("Message Sent Successfully!");
+	Serial.println("Message Sent Successfully!");
     return 1;
   } else {
-    Serial.println("Error Sending Message...");
-    return 0;
+	Serial.println("Error Sending Message...");
+	return 0;
   }
+#endif
 }
 
 int TTUCAN::receive_Msg(INT32U *id, INT8U *len, INT8U *buf){
 	int result;
+#ifdef ISOTP_COMM
+	RxMsg.tx_id=can_id; //must be configured to send back to node that sent FF or CF - needs development
+	RxMsg.Buffer=(uint8_t *)calloc(MAX_MSGBUF,sizeof(uint8_t));
+	receive(&RxMsg);
+	if(RxMsg.rx_id == pingID){
+		byte data[] = {0xFF};
+		for(int i=0; i<1; i++){ //maybe send multiple times - currently only sends once
+			sendMsgBuf(pingResponse, 1, data); //send msg, len = 1
+			//delay(20);
+		}
+	}
+	result = 1;
+#else
 	memset(rxBuffer,0,sizeof(rxBuffer));
-	result = readMsgBuf(&rxId, &rxLen, rxBuffer);
-	
+	result = readMsgBuf(&rxId, &rxLen, rxBuffer);	
 	*id = rxId;
 	*len = rxLen;
 	for(int i = 0; i<rxLen; i++){
@@ -248,11 +261,12 @@ int TTUCAN::receive_Msg(INT32U *id, INT8U *len, INT8U *buf){
 	
 	if(rxId == pingID){
 		byte data[] = {0xFF};
-		for(int i=0; i<1; i++){
+		for(int i=0; i<1; i++){  //maybe send multiple times - currently only sends once
 			sendMsgBuf(pingResponse, 1, data); //send msg, len = 1
 			//delay(20);
 		}
 	}
+#endif
 	return result; //status of receive function
 }
 
@@ -344,7 +358,7 @@ int TTUCAN::networkStatus(INT8U _ext){
 	Serial.println("Checking network status.");
   byte data[] = {0xFF};
   int len = sizeof(data);
-  byte sndStat = sendMsgBuf(networkStatusID, len, data);
+  byte sndStat = sendMsgBuf(networkStatusID, len, data); //only waits for ack bit, this message is never processed
   if(sndStat == CAN_OK){
     Serial.println("Network is functioning!");
     return 1;
@@ -397,7 +411,16 @@ int TTUCAN::checkNodes(INT8U _ext){
     }
     //Serial.println(ID, HEX);
     ID |= 0x40000000; //send as remote request
-    sendMsgBuf(ID, 1, data); //send msg 
+#ifdef ISOTP_COMM
+  TxMsg.len=sizeof(data);
+  TxMsg.Buffer=(uint8_t *)calloc(MAX_MSGBUF,sizeof(uint8_t));
+  TxMsg.tx_id=ID;
+  TxMsg.rx_id=return_ID;;
+  memcpy(TxMsg.Buffer,data,sizeof(data));
+  send(&TxMsg);
+#else
+	sendMsgBuf(ID, 1, data); //send msg 
+#endif
     sentTime = millis();   
     //wait for response - need to decide timeout
     while(1){
@@ -469,7 +492,16 @@ int TTUCAN::pingNode(INT32U ping_address, INT8U _ext){
   }
   //Serial.println(ID, HEX);
   ID |= 0x40000000; //send as remote request
+#ifdef ISOTP_COMM
+  TxMsg.len=sizeof(data);
+  TxMsg.Buffer=(uint8_t *)calloc(MAX_MSGBUF,sizeof(uint8_t));
+  TxMsg.tx_id=ID;
+  TxMsg.rx_id=return_ID;
+  memcpy(TxMsg.Buffer,data,sizeof(data));
+  send(&TxMsg);
+#else
   sendMsgBuf(ID, 1, data); //send msg 
+#endif
   sentTime = millis();   
   //wait for response - need to decide timeout
   while(1){
