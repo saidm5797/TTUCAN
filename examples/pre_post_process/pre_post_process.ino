@@ -1,4 +1,10 @@
+/*
+Functions to separate variables into bytes to be sent over the
+CAN bus and reassemble them after receiving the data.
+*/
+
 #include <mcp_can.h>
+#include <TTU_IsoTp.h>
 #include <SPI.h>
 #include <TTUCAN.h>
 
