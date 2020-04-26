@@ -29,10 +29,10 @@ TTU_IsoTp: https://github.com/saidm5797/TTU_IsoTp
  - Build CAN ID of transmit message 
  - takes address to send message to, message data descriptor (0-7 for standard messages, 0-8192 for extended)
 
-**int send_Msg(INT32U msgID, INT8U rtr, INT8U *data, INT32U len)**
+**int send_Msg(INT32U msgID, INT8U rtr, INT8U \*data, INT32U len)**
  - Send a message over CAN
  - takes message ID, rtr (1 for remote frame, 0 for non-remote), data array, message length
-
-**int receive_Msg(INT32U *id, INT8U *len, INT8U *buf)**
+ 
+**int receive_Msg(INT32U \*id, INT8U \*len, INT8U \*buf)**
  - Receive a message
  - takes pointers to Id variable, message length variable, and data array
