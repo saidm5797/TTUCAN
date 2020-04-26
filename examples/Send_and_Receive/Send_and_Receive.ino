@@ -11,7 +11,7 @@ char msgString[128];                        // Array to store serial string
 byte data[8] = {0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22};
 
 #define CAN0_INT 2                              // Set INT to pin 2
-TTUCAN CAN0(10, CAN0_INT, 4, 1);      // Set CS to pin 10
+TTUCAN CAN0(10, CAN0_INT, 4, 0);      // Set CS to pin 10
 
 void setup()
 {
