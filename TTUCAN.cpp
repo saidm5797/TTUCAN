@@ -6,93 +6,110 @@
 #include <mcp_can_dfs.h>
 #include <SPI.h>
 
-
-TTUCAN::TTUCAN(INT8U _CS, uint8_t mcp_int, INT32U _address, INT8U Ext) : IsoTP(_CS, mcp_int, ext)
+/*********************************************************************************************************
+** Function name:           TTUCAN
+** Descriptions:            Public function to declare CAN class
+** Arguments:               CS pin, Interrupt pin, node address, ext (0 or 1)               
+*********************************************************************************************************/
+TTUCAN::TTUCAN(INT8U _CS, uint8_t mcp_int, INT32U _address, INT8U Ext) : IsoTp(_CS, mcp_int)
 {
 	if(Ext != 0 && Ext != 1){
 		Serial.println("ERROR: Ext must be either 0 or 1. CAN is not initialized!");
-		return 0;
+		return;
 	}
 	else if(Ext &&(_address > 255 || _address < 0)){
 		Serial.println("ERROR: Adresses must be between 0-255 for _extended configuration. CAN is not initialized!");
-		return 0;
+		return;
 	}
 	else if(!Ext &&(_address > 15 || _address < 0)){
 		Serial.println("ERROR: Adresses must be between 0-15 for standard configuration. CAN is not initialized!");
-		return 0;
+		return;
 	}
 	
 	nodeAddress = _address;
-	//_ext = Ext;
+	_ext = Ext;
 	
 	if(!_ext){ //standard
-		numNodes=15; //don't include home node
+		numNodes=15; //don't count home node
 		homeAddress = 15;
-		pingID = ((((nodeAddress << 27)|(nodeAddress << 23))|0x00700000)>>20);
+		pingID = ((((nodeAddress << 23)|(nodeAddress << 19))|0x00070000)>>16) | 0x40000000;
+		pingFilter = ((((nodeAddress << 23)|(nodeAddress << 19))|0x00070000));
+		nodeFilter = (nodeAddress << 23);
 		pingResponse = ((((homeAddress << 27)|(nodeAddress << 23))|0x00700000)>>20);
-		networkStatusID = 0x7FF;
+		networkStatusID = 0x07FF0000;
 	}
 	else{
-		numNodes=255; //don't include home node
+		numNodes=255; //don't count home node
 		homeAddress = 255;
-		pingID = (((nodeAddress << 21)|(nodeAddress << 13))|0x001FFF) | 0x80000000;
-		pingResponse = (((homeAddress << 21)|(nodeAddress << 13))|0x001FFF) | 0x80000000;
+		pingID = (((nodeAddress << 21)|(nodeAddress << 13))|0x00001FFF) | 0x80000000 | 0x40000000;
+		nodeFilter = (nodeAddress << 21);		
+		pingFilter = (((nodeAddress << 21)|(nodeAddress << 13))|0x00001FFF);
+		pingResponse = (((homeAddress << 21)|(nodeAddress << 13))|0x00001FFF) | 0x80000000;
 		networkStatusID = 0x1FFFFFFF | 0x80000000;
 	}
 }
 
-
+/*********************************************************************************************************
+** Function name:           TTU_begin
+** Descriptions:            Public function to initialize CAN object/set up initial filters
+** Arguments:               default: idmodeset = MCP_STDEXT, speedset = CAN_500KBPS, clockset = MCP_16MHZ
+** Returns:                 1 if initialized, 0 if failed
+*********************************************************************************************************/
 int TTUCAN::TTU_begin(INT8U idmodeset, INT8U speedset, INT8U clockset){
   // Initialize MCP2515 running at 16MHz with a baudrate of 500kb/s and the masks and filters disabled.
-  if (nodeAddress == 15 || nodeAddress == 255){                      //create HOME node with no filters
-    if(begin(MCP_ANY, speedset, clockset) == CAN_OK)
+  if (nodeAddress == homeAddress){                      //create HOME node with no filters
+    Serial.println("Home Node");
+	if(begin(MCP_ANY, speedset, clockset) == CAN_OK){
       Serial.println("MCP2515 Initialized Successfully!");
-    else
+	}
+    else{
       Serial.println("Error Initializing MCP2515..."); 
-      return 0;                  
+      return 0; 
+	}
     disOneShotTX();
     setMode(MCP_NORMAL); // Set operation mode to normal so the MCP2515 sends acks to received data.   
-    return 1; 
+	return 1; 
   }
-
+  Serial.print("Node ");
+  Serial.println(nodeAddress);
+  if(begin(idmodeset, speedset, clockset) == CAN_OK){
+    if(_ext){
+	  Serial.println("MCP2515 Initialized Successfully! - Extended");
+	}
+	else{
+	  Serial.println("MCP2515 Initialized Successfully! - Standard");
+	}
+  }
+  else{
+    Serial.println("Error Initializing MCP2515..."); 
+  }
+  disOneShotTX();
   //initialize all masks and filters - masks should not be changed, filters 0-2 should not be changed. 
   //filters 3-5 can be changed to accept messages addressed to three other nodes (use add_filter() to chnage these filters)
   switch(_ext){
     case 0: //standard - 16 nodes max, numbered 0-15
-      if(begin(idmodeset, speedset, clockset) == CAN_OK)
-        Serial.println("MCP2515 Initialized Successfully! - Standard");
-      else
-        Serial.println("Error Initializing MCP2515..."); 
-      disOneShotTX();
-      
-      init_Mask(0,0,0x7FF00000);                // Init first mask - all ID bits must match
-      init_Filt(0,0,0x7FF00000);                // Init first filter to general network ping
-      init_Filt(1,0,((((nodeAddress << 27)|(nodeAddress << 23))|0x00700000)>>20)); // Init second filter to direct ping message
-      
-      init_Mask(1,0,0x78000000);                // Init second mask - first 4 ID bits must match 
-      init_Filt(2,0,((nodeAddress << 27)));                // Init third filter to accept msgs directed to this node
+      init_Mask(0,0,0x07FF0000);                // Init first mask - all ID bits must match
+      init_Filt(0,0,networkStatusID);                // Init first filter to general network ping
+      init_Filt(1,0,pingFilter); // Init second filter to direct ping message
+
+	  init_Mask(1,0,0x07800000);                // Init second mask - first 4 ID bits must match 
+      init_Filt(2,0,nodeFilter);                // Init third filter to accept msgs directed to this node
       //if these filters aren't used, default is to be the same as second filter
-      init_Filt(3,0,((nodeAddress << 27)));
-      init_Filt(4,0,((nodeAddress << 27)));
-      init_Filt(5,0,((nodeAddress << 27)));    
+      init_Filt(3,0,nodeFilter);
+      init_Filt(4,0,nodeFilter);
+      init_Filt(5,0,nodeFilter);    
       break;
     case 1: //_extended - 256 nodes max, numbered 0-255
-      if(begin(MCP_STD_ext, CAN_500KBPS, MCP_16MHZ) == CAN_OK)
-        Serial.println("MCP2515 Initialized Successfully! - _extended");
-      else
-        Serial.println("Error Initializing MCP2515..."); 
-      disOneShotTX();
-      
       init_Mask(0,1,0x1FFFFFFF);                // Init first mask...
       init_Filt(0,1,0x1FFFFFFF);                // Init first filter to general network ping
-      init_Filt(1,1,(((nodeAddress << 21)|(nodeAddress << 13))|0x001FFF));  // Init second filter to direct ping message
+      init_Filt(1,1,pingFilter);  // Init second filter to direct ping message
       
       init_Mask(1,1,0x1FE00000);                // Init second mask... 
-      init_Filt(2,1,(nodeAddress << 21));                // Init third filter to accept msgs directed to this node
+      init_Filt(2,1,nodeFilter);                // Init third filter to accept msgs directed to this node
       //if these filters aren't used, default is to be the same as second filter
-      init_Filt(3,1,(nodeAddress << 21));
-      init_Filt(4,1,(nodeAddress << 21));
-      init_Filt(5,1,(nodeAddress << 21));
+      init_Filt(3,1,nodeFilter);
+      init_Filt(4,1,nodeFilter);
+      init_Filt(5,1,nodeFilter);
       break;
     default:
       Serial.println("ERROR: _ext must be equal to 0 or 1. CAN is not initialized!");
@@ -103,7 +120,13 @@ int TTUCAN::TTU_begin(INT8U idmodeset, INT8U speedset, INT8U clockset){
   return 1;
 }
 
-int TTUCAN::addFilter(INT32U filterAddress, INT8U _ext, INT8U filterRegister){
+/*********************************************************************************************************
+** Function name:           addFilter
+** Descriptions:            Public function to add optional filters 
+** Arguments:               filterAddress - read messages to this node, filterRegister - initialize this register
+** Returns:                 1 if initialized, 0 if failed
+*********************************************************************************************************/
+int TTUCAN::addFilter(INT32U filterAddress, INT8U filterRegister){
    if(_ext &&(filterAddress > 255 || filterAddress < 0)){
     Serial.println("ERROR: Adresses must be between 0-255 for _extended configuration. Filter is not initialized!");
     return 0;
@@ -120,7 +143,7 @@ int TTUCAN::addFilter(INT32U filterAddress, INT8U _ext, INT8U filterRegister){
   // Init filter to also accept msgs directed to node specified by address
   switch(_ext){
     case 0:
-      init_Filt(filterRegister,0,(filterAddress << 27));
+      init_Filt(filterRegister,0,(filterAddress << 23));
       break;
     case 1:
       init_Filt(filterRegister,1,(filterAddress << 21));
@@ -132,6 +155,12 @@ int TTUCAN::addFilter(INT32U filterAddress, INT8U _ext, INT8U filterRegister){
   return 1; 
 }
 
+/*********************************************************************************************************
+** Function name:           buildTransmitID
+** Descriptions:            Public function to create ID for messages to be sent 
+** Arguments:               address to send to, data descriptor
+** Returns:                 created message ID
+*********************************************************************************************************/
 INT32U TTUCAN::buildTransmitID(INT32U to_addr, INT32U descriptor){
   if(_ext &&(to_addr > 255 || to_addr < 0)){
     Serial.println("ERROR: Adresses must be between 0-255 for _extended configuration.");
@@ -169,6 +198,12 @@ INT32U TTUCAN::buildTransmitID(INT32U to_addr, INT32U descriptor){
   
 }
 
+/*********************************************************************************************************
+** Function name:           buildReceiveID
+** Descriptions:            Public function to create ID for messages to be received 
+** Arguments:               address to receive from, data descriptor
+** Returns:                 created message ID
+*********************************************************************************************************/
 INT32U TTUCAN::buildReceiveID(INT32U from_addr, INT32U descriptor){
   if(_ext &&(from_addr > 255 || from_addr < 0)){
     Serial.println("ERROR: Adresses must be between 0-255 for _extended configuration.");
@@ -204,6 +239,12 @@ INT32U TTUCAN::buildReceiveID(INT32U from_addr, INT32U descriptor){
   
 }
 
+/*********************************************************************************************************
+** Function name:           send_Msg
+** Descriptions:            Public function to send CAN messages 
+** Arguments:               CAN ID, remote frame (0 or 1), data array, data length in bytes
+** Returns:                 1 if sent successfully, 0 if error
+*********************************************************************************************************/
 int TTUCAN::send_Msg(INT32U msgID, INT8U rtr, INT8U *data, INT32U len){
   if(rtr != 0 && rtr != 1){
     Serial.println("ERROR: rtr must be equal to 0 or 1. Message not sent!");
@@ -236,6 +277,12 @@ int TTUCAN::send_Msg(INT32U msgID, INT8U rtr, INT8U *data, INT32U len){
 #endif
 }
 
+/*********************************************************************************************************
+** Function name:           receive_Msg
+** Descriptions:            Public function to receive CAN messages 
+** Arguments:               address of ID variable (&rxId), address of data length variable (&len), data array
+** Returns:                 1 if received successfully, 0 if error
+*********************************************************************************************************/
 int TTUCAN::receive_Msg(INT32U *id, INT8U *len, INT8U *buf){
 	int result;
 #ifdef ISOTP_COMM
@@ -244,9 +291,13 @@ int TTUCAN::receive_Msg(INT32U *id, INT8U *len, INT8U *buf){
 	receive(&RxMsg);
 	if(RxMsg.rx_id == pingID){
 		byte data[] = {0xFF};
-		for(int i=0; i<1; i++){ //maybe send multiple times - currently only sends once
-			sendMsgBuf(pingResponse, 1, data); //send msg, len = 1
-			//delay(20);
+		byte sndStat = sendMsgBuf(pingResponse, 1, data); //send msg, len = 1
+		if(sndStat == CAN_OK){
+			Serial.println("Ping Response Sent Successfully!");
+			return 1;
+		} else {
+			Serial.println("Error Sending Message...");
+			return 0;
 		}
 	}
 	result = 1;
@@ -261,15 +312,23 @@ int TTUCAN::receive_Msg(INT32U *id, INT8U *len, INT8U *buf){
 	
 	if(rxId == pingID){
 		byte data[] = {0xFF};
-		for(int i=0; i<1; i++){  //maybe send multiple times - currently only sends once
-			sendMsgBuf(pingResponse, 1, data); //send msg, len = 1
-			//delay(20);
+		byte sndStat = sendMsgBuf(pingResponse, 1, data); //send msg, len = 1
+		if(sndStat == CAN_OK){
+			Serial.println("Ping Response Sent Successfully!");
+			return 1;
+		} else {
+			Serial.println("Error Sending Message...");
+			return 0;
 		}
 	}
 #endif
 	return result; //status of receive function
 }
 
+/*********************************************************************************************************
+** Function name:           checkReceive
+** Descriptions:            Public function, Checks for received data.  (Used if not using the interrupt output)
+*********************************************************************************************************/
 INT8U TTUCAN::check_Receive(void)
 {
     INT8U res;
@@ -277,15 +336,25 @@ INT8U TTUCAN::check_Receive(void)
     return res;
 }
 
+/*********************************************************************************************************
+** Function name:           checkError
+** Descriptions:            Public function, Returns error register data.
+*********************************************************************************************************/
 INT8U TTUCAN::check_Error(void)
 {
     INT8U eflg = checkError();
     return eflg;
 }
 
+
 //************************************************ Home Node functions *************************************************//
 
-void TTUCAN::homeMenu(){
+
+/*********************************************************************************************************
+** Function name:           homeMenu
+** Descriptions:            Public function to display home node menu
+*********************************************************************************************************/
+void TTUCAN::homeMenu(void){
 	if(nodeAddress != homeAddress){
 		Serial.println("This function is reserved for the HOME Node only!");
 		return;
@@ -297,18 +366,23 @@ void TTUCAN::homeMenu(){
   Serial.println("*  nodes - Check which nodes are connected to the network. Type \"s\" to end function.");
   Serial.println("*  (integer value) - Ping node address. Input should be 0-14 for standard or 0-254 for _extended.");
   Serial.println();
-  Serial.println("Input command at the top of the Serial Monitor. Make sure line ending is set to Newline.");
+  Serial.println("** Input command at the top of the Serial Monitor. Make sure line ending is set to Newline. **");
+  Serial.println();
+  Serial.println();
 }
 
-//display all messages sent on the bus
-void TTUCAN::displayActivity(){
-	if(nodeAddress != homeAddress){
-		Serial.println("This function is reserved for the HOME Node only!");
-		return;
-	}
-	Serial.println("Displaying bus activity.  Type \"s\" to end function.");
-    delay(1000);
-	
+/*********************************************************************************************************
+** Function name:           displayActivity
+** Descriptions:            Public function to display all messages sent on the bus
+*********************************************************************************************************/
+void TTUCAN::displayActivity(void){
+  if(nodeAddress != homeAddress){
+	Serial.println("This function is reserved for the HOME Node only!");
+	return;
+  }
+  Serial.println("Displaying bus activity.  Type \"s\" to end function.");
+  delay(1000);
+  
   while(1){
     //check for stop command
     if(Serial.available() > 0){
@@ -322,8 +396,9 @@ void TTUCAN::displayActivity(){
         rxByte = 0;
       }
     }
-    // If CAN0_INT pin is low, read receive buffer
-    if(!digitalRead(CAN0_INT))                         
+	
+    // If _mcp_int pin is low, read receive buffer
+    if(!digitalRead(_mcp_int))   //can_receive()// (PINE & 0x10) == 0                   
     {
       readMsgBuf(&rxId, &rxLen, rxBuffer);      // Read data: rxLen = data length, buf = data byte(s)
       
@@ -349,13 +424,17 @@ void TTUCAN::displayActivity(){
   }
 }
 
-//send lowest priority message to check if there is a network
-int TTUCAN::networkStatus(INT8U _ext){ 
+/*********************************************************************************************************
+** Function name:           networkStatus
+** Descriptions:            Public function to send lowest priority message to check if there is a functioning network
+** Returns:                 1 if sent successfully, 0 if error
+*********************************************************************************************************/
+int TTUCAN::networkStatus(void){ 
 	if(nodeAddress != homeAddress){
 		Serial.println("This function is reserved for the HOME Node only!");
-		return;
+		return 0;
 	}
-	Serial.println("Checking network status.");
+  Serial.println("Checking network status.");
   byte data[] = {0xFF};
   int len = sizeof(data);
   byte sndStat = sendMsgBuf(networkStatusID, len, data); //only waits for ack bit, this message is never processed
@@ -368,19 +447,23 @@ int TTUCAN::networkStatus(INT8U _ext){
   }  
 }
 
-//ping all nodes to get a list of functioning nodes
-int TTUCAN::checkNodes(INT8U _ext){
-	if(nodeAddress != homeAddress){
-		Serial.println("This function is reserved for the HOME Node only!");
-		return;
-	}
-	Serial.println("Checking which nodes are functioning.  Type \"s\" to end function.");
-    delay(1000);
+/*********************************************************************************************************
+** Function name:           checkNodes
+** Descriptions:            Public function to ping all nodes to get a list of functioning nodes
+** Returns:                 1 if completed successfully, 0 if error
+*********************************************************************************************************/
+int TTUCAN::checkNodes(void){
+  if(nodeAddress != homeAddress){
+	Serial.println("This function is reserved for the HOME Node only!");
+	return 0;
+  }
+  Serial.println("Checking which nodes are functioning.  Type \"s\" to end function.");
+  delay(1000);
   int currentTime, sentTime;
   INT32U ping_address = 0; //start with node 0
   INT32U ID, return_ID; 
   byte data[] = {0xFF};
-  int TimeOut = 5000;
+  int TimeOut = 500;
 
   for(int i=0; i<numNodes; i++){
     //check for stop command
@@ -399,17 +482,14 @@ int TTUCAN::checkNodes(INT8U _ext){
     Serial.print("Checking node ");
     Serial.print(i);
     Serial.println("...");
-    if(!_ext){ //standard message
-      ID = ((((ping_address << 27)|(ping_address << 23))|0x00700000)>>20);
-      return_ID = ((((homeAddress << 27)|(ping_address << 23))|0x00700000)>>20);
-    }
-    else{ //_extended message
-      ID = (((ping_address << 21)|(ping_address << 13))|0x001FFF);
-      ID |= 0x80000000;
-      return_ID = (((homeAddress << 21)|(ping_address << 13))|0x001FFF);
-      return_ID |= 0x80000000;
-    }
-    //Serial.println(ID, HEX);
+	if(!_ext){ //standard message
+	  ID = ((((ping_address << 27)|(ping_address << 23))|0x00700000)>>20);
+	  return_ID = ((((homeAddress << 27)|(ping_address << 23))|0x00700000)>>20);
+	}
+	else{ //_extended message
+	  ID = (((ping_address << 21)|(ping_address << 13))|0x00001FFF) | 0x80000000;
+	  return_ID = (((homeAddress << 21)|(ping_address << 13))|0x00001FFF) | 0x80000000;
+	}
     ID |= 0x40000000; //send as remote request
 #ifdef ISOTP_COMM
   TxMsg.len=sizeof(data);
@@ -424,16 +504,18 @@ int TTUCAN::checkNodes(INT8U _ext){
     sentTime = millis();   
     //wait for response - need to decide timeout
     while(1){
-      readMsgBuf(&rxId, &rxLen, rxBuffer);
+	  if(!digitalRead(_mcp_int)){
+        readMsgBuf(&rxId, &rxLen, rxBuffer);
+	  }
       if(rxId == return_ID){
-        sprintf(msgString, "Node %d is functioning.", i);
+        sprintf(msgString, "** Node %d is functioning. **", ping_address);
         Serial.println(msgString);
         break; //end while loop
       }
       else{
         currentTime = millis() - sentTime; //check timeout
         if(currentTime >= TimeOut){ //5 second timeout to wait for return message
-          sprintf(msgString, "Node %d is not functioning.", i);
+          sprintf(msgString, "Node %d is not functioning.", ping_address);
           Serial.println(msgString);
           break; //end while loop
         }
@@ -445,19 +527,24 @@ int TTUCAN::checkNodes(INT8U _ext){
   return 1;
 }
 
-//ping one node directly to check if it is functioning
-int TTUCAN::pingNode(INT32U ping_address, INT8U _ext){
-	if(nodeAddress != homeAddress){
-		Serial.println("This function is reserved for the HOME Node only!");
-		return;
-	}
-	sprintf(msgString, "Ping node: %d", address);
-    Serial.println(msgString);
+/*********************************************************************************************************
+** Function name:           pingNode
+** Descriptions:            ping one node directly to check if it is functioning
+** Arguments:               node address to ping
+** Returns:                 1 if sent successfully, 0 if error
+*********************************************************************************************************/
+int TTUCAN::pingNode(INT32U ping_address){
+  if(nodeAddress != homeAddress){
+	Serial.println("This function is reserved for the HOME Node only!");
+	return 0;
+  }
+  sprintf(msgString, "Ping node: %d", ping_address);
+  Serial.println(msgString);
 	
   int currentTime, sentTime;
-  INT32U ID, return_ID, homeAddress; 
+  INT32U ID, return_ID; 
   byte data[] = {0xFF};
-  int TimeOut = 5000;
+  int TimeOut = 500;
 
   if(_ext && (ping_address > 255 || ping_address < 0)){
     Serial.println("ERROR: Adresses must be between 0-255 for _extended configuration.");
@@ -473,24 +560,14 @@ int TTUCAN::pingNode(INT32U ping_address, INT8U _ext){
   sprintf(msgString, "Pinging node %d...", ping_address);
   Serial.println(msgString);
 
-  if(!_ext){ //standard
-    homeAddress = 15;
-  }
-  else{
-    homeAddress = 255;
-  }
-
   if(!_ext){ //standard message
     ID = ((((ping_address << 27)|(ping_address << 23))|0x00700000)>>20);
     return_ID = ((((homeAddress << 27)|(ping_address << 23))|0x00700000)>>20);
   }
   else{ //_extended message
-    ID = (((ping_address << 21)|(ping_address << 13))|0x001FFF);
-    ID |= 0x80000000;
-    return_ID = (((homeAddress << 21)|(ping_address << 13))|0x001FFF);
-    return_ID |= 0x80000000;
+    ID = (((ping_address << 21)|(ping_address << 13))|0x00001FFF) | 0x80000000;
+    return_ID = (((homeAddress << 21)|(ping_address << 13))|0x00001FFF) | 0x80000000;
   }
-  //Serial.println(ID, HEX);
   ID |= 0x40000000; //send as remote request
 #ifdef ISOTP_COMM
   TxMsg.len=sizeof(data);
@@ -505,11 +582,12 @@ int TTUCAN::pingNode(INT32U ping_address, INT8U _ext){
   sentTime = millis();   
   //wait for response - need to decide timeout
   while(1){
-    readMsgBuf(&rxId, &rxLen, rxBuffer);
+    if(!digitalRead(_mcp_int)){
+      readMsgBuf(&rxId, &rxLen, rxBuffer);
+	}
     if(rxId == return_ID){
-      sprintf(msgString, "Node %d is functioning.", ping_address);
+      sprintf(msgString, "** Node %d is functioning. **", ping_address);
       Serial.println(msgString);
-      //Serial.println("Node is functioning.");
       break; //end while loop
     }
     else{
@@ -517,7 +595,6 @@ int TTUCAN::pingNode(INT32U ping_address, INT8U _ext){
       if(currentTime >= TimeOut){ //5 second timeout to wait for return message
         sprintf(msgString, "Node %d is not functioning.", ping_address);
         Serial.println(msgString);
-        //Serial.println("Node is not functioning.");
         break; //end while loop
       }
     }
