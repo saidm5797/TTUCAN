@@ -1,6 +1,7 @@
 // Display CAN IDs Example
 
 #include <mcp_can.h>
+#include <mcp_can_dfs.h>
 #include <TTU_IsoTp.h>
 #include <SPI.h>
 #include <TTUCAN.h>
@@ -24,8 +25,8 @@ void setup()
     sprintf(msgString, "Messages sent to node %1d:", to_addr);
     Serial.println(msgString);
     for(int descriptor=0; descriptor <= 7; descriptor++){
-      txId = CAN0.buildMsgID(to_addr, descriptor);
-      sprintf(msgString, "Message with descriptor %1d: %1d", descriptor, txId);
+      txId = CAN0.buildTransmitID(to_addr, descriptor);
+      sprintf(msgString, "Message sent with descriptor %1d: 0x%X", descriptor, txId);
       Serial.println(msgString);
     }
     Serial.println();
@@ -38,8 +39,8 @@ void setup()
     sprintf(msgString, "Messages received from node %1d:", from_addr);
     Serial.println(msgString);
     for(int descriptor=0; descriptor <= 7; descriptor++){
-      rxId = CAN0.buildMsgID(from_addr, descriptor);
-      sprintf(msgString, "Message received with descriptor %1d: %1d", descriptor, rxId);
+      rxId = CAN0.buildReceiveID(from_addr, descriptor);
+      sprintf(msgString, "Message received with descriptor %1d: 0x%X", descriptor, rxId);
       Serial.println(msgString);
     }
     Serial.println();
