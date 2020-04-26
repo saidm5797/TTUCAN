@@ -4,7 +4,7 @@
 #define TTUCAN_H
 
 #include <mcp_can.h>
-#include <iso-tp-derived.h>
+#include <TTU_IsoTp.h>
 #include "Arduino.h"
 
 //#define ISOTP_COMM
