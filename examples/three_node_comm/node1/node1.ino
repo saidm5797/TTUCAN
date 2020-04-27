@@ -75,6 +75,9 @@ INT32U preProcess(byte *data, INT32U to_addr, INT32U descriptor){
   
   switch(transmitID){
     case 0x10B: //sent from node 1 to node 2
+      //reset data array to all zeros
+      memset(data,0,sizeof(data)); 
+      //begin filling data array
       _size = sizeof(temp);
       memcpy(data, (byte *)&temp, sizeof(temp));
       memcpy((data+_size), (byte *)&speed_, sizeof(speed_));
@@ -82,6 +85,9 @@ INT32U preProcess(byte *data, INT32U to_addr, INT32U descriptor){
       break;
     default: //just a template
       /*
+      //reset data array to all zeros
+      memset(data,0,sizeof(data)); 
+      //begin filling data array
       _size = sizeof(temp);
       memcpy(data, (byte *)&temp, sizeof(temp));
       memcpy((data+_size), (byte *)&count, sizeof(count));
