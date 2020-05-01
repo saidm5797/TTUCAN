@@ -588,7 +588,7 @@ int TTUCAN::pingNode(INT32U ping_address){
     if(rxId == return_ID){
       sprintf(msgString, "** Node %d is functioning. **", ping_address);
       Serial.println(msgString);
-      break; //end while loop
+      return 1; //end while loop
     }
     else{
       currentTime = millis() - sentTime; //check timeout
@@ -599,5 +599,5 @@ int TTUCAN::pingNode(INT32U ping_address){
       }
     }
   } //end while loop
-  return 1;
+  return 0;
 }
