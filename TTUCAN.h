@@ -8,7 +8,7 @@
 #include "Arduino.h"
 
 //#define ISOTP_COMM
-
+//#define TTU_DEBUG
 
 class TTUCAN : protected IsoTp
 {
