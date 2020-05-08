@@ -12,12 +12,12 @@ byte data[8];
 
 //example variables
 float temp = 17.5;
-int count = 325;
+int count;
 double speed_ = 35.5;
-float length_ = 126.8;
-int passengers = 15;
-int gallons = 8;
-float miles = 5858.7;
+float length_;
+int passengers;
+int gallons;
+float miles;
 
 #define CAN0_INT 2                              // Set INT to pin 2
 TTUCAN CAN0(10, CAN0_INT, 1, 0);                               // Set CS to pin 10
@@ -78,24 +78,10 @@ INT32U preProcess(byte *data, INT32U to_addr, INT32U descriptor){
       //reset data array to all zeros
       memset(data,0,sizeof(data)); 
       //begin filling data array
-      _size = sizeof(temp);
       memcpy(data, (byte *)&temp, sizeof(temp));
+      _size = sizeof(temp);
       memcpy((data+_size), (byte *)&speed_, sizeof(speed_));
       _size += sizeof(speed_);
-      break;
-    default: //just a template
-      /*
-      //reset data array to all zeros
-      memset(data,0,sizeof(data)); 
-      //begin filling data array
-      _size = sizeof(temp);
-      memcpy(data, (byte *)&temp, sizeof(temp));
-      memcpy((data+_size), (byte *)&count, sizeof(count));
-      _size += sizeof(count);
-      memcpy((data+_size), (byte *)&speed_, sizeof(speed_));
-      _size += sizeof(speed_);
-      memcpy((data+_size), (byte *)&length_, sizeof(length_));
-      */
       break;
   }
   return transmitID;
@@ -107,9 +93,9 @@ void postProcess(byte *data, INT32U receiveID){
   //in order to process information correctly
   int _size;
   switch(receiveID){
-    case 0x99: //sent from node 3 to node 1
-      _size = sizeof(passengers); //starting index of data array
+    case 0x99: //sent from node 3 to node 1 
       memcpy(&passengers, data, sizeof(passengers));
+      _size = sizeof(passengers); //starting index of data array
       memcpy(&gallons, (data +_size), sizeof(gallons));
       _size +=sizeof(gallons); //increment index of array by size of count to access the next variable
       memcpy(&miles, (data +_size), sizeof(miles));
@@ -123,8 +109,8 @@ void postProcess(byte *data, INT32U receiveID){
       Serial.println(miles);
       break;
     case 0x197: //sent from node 2 to node 3 (use addFilter() to be able to see messages sent to another node)
-      _size = sizeof(count); //starting index of data array
       memcpy(&count, data, sizeof(count));
+      _size = sizeof(count); //starting index of data array
       memcpy(&length_, (data +_size), sizeof(length_));
       _size +=sizeof(length_); //increment index of array by size of count to access the next variable
 
@@ -132,19 +118,6 @@ void postProcess(byte *data, INT32U receiveID){
       Serial.println(count);
       Serial.print("Length: ");
       Serial.println(length_);
-      break;
-    default: //just a template
-      /*
-      _size = sizeof(temp);
-      memcpy(&temp, data, sizeof(temp));
-      memcpy(&count, (data +_size), sizeof(count));
-      _size +=sizeof(count);
-      memcpy(&speed_, (data +_size), sizeof(speed_));
-  
-      Serial.println(temp);
-      Serial.println(count);
-      Serial.println(speed_);
-      */
       break;
   }
 }
