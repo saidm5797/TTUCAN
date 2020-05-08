@@ -11,10 +11,10 @@ char msgString[128];                        // Array to store serial string
 byte data[8];
 
 //example variables
-float temp = 17.5;
-int count = 325;
-double speed_ = 35.5;
-float length_ = 126.8;
+float temp;
+int count;
+double speed_;
+float length_;
 int passengers = 15;
 int gallons = 8;
 float miles = 5858.7;
@@ -77,27 +77,13 @@ INT32U preProcess(byte *data, INT32U to_addr, INT32U descriptor){
     case 0x99: //sent from node 2 to node 3
       //reset data array to all zeros
       memset(data,0,sizeof(data)); 
-      //begin filling data array
-	  _size = sizeof(passengers);
+      //begin filling data array  
       memcpy(data, (byte *)&passengers, sizeof(passengers));
+      _size = sizeof(passengers);	  
       memcpy((data+_size), (byte *)&gallons, sizeof(gallons));
       _size += sizeof(gallons);
       memcpy((data+_size), (byte *)&miles, sizeof(miles));
       _size += sizeof(miles);
-      break;
-    default: //just a template
-      /*
-      //reset data array to all zeros
-      memset(data,0,sizeof(data)); 
-      //begin filling data array
-	  _size = sizeof(temp);
-      memcpy(data, (byte *)&temp, sizeof(temp));
-      memcpy((data+_size), (byte *)&count, sizeof(count));
-      _size += sizeof(count);
-      memcpy((data+_size), (byte *)&speed_, sizeof(speed_));
-      _size += sizeof(speed_);
-      memcpy((data+_size), (byte *)&length_, sizeof(length_));
-      */
       break;
   }
 
@@ -111,8 +97,8 @@ void postProcess(byte *data, INT32U receiveID){
   int _size;
   switch(receiveID){
     case 0x197: //sent from node 2 to node 3
-      _size = sizeof(count); //starting index of data array
       memcpy(&count, data, sizeof(count));
+      _size = sizeof(count); //starting index of data array	  
       memcpy(&length_, (data +_size), sizeof(length_));
       _size +=sizeof(length_); //increment index of array by size of count to access the next variable
 
@@ -122,8 +108,8 @@ void postProcess(byte *data, INT32U receiveID){
       Serial.println(length_);
       break;
     case 0x10B: //sent from node 1 to node 2 (use addFilter() to be able to see messages sent to another node)
-      _size = sizeof(temp); //starting index of data array
       memcpy(&temp, data, sizeof(temp));
+      _size = sizeof(temp); //starting index of data array	  
       memcpy(&speed_, (data +_size), sizeof(speed_));
       _size +=sizeof(speed_); //increment index of array by size of count to access the next variable
 
@@ -131,18 +117,6 @@ void postProcess(byte *data, INT32U receiveID){
       Serial.println(temp);
       Serial.print("Speed: ");
       Serial.println(speed_);
-    default: //just a template
-      /*
-      _size = sizeof(temp);
-      memcpy(&temp, data, sizeof(temp));
-      memcpy(&count, (data +_size), sizeof(count));
-      _size +=sizeof(count);
-      memcpy(&speed_, (data +_size), sizeof(speed_));
-  
-      Serial.println(temp);
-      Serial.println(count);
-      Serial.println(speed_);
-      */
       break;
   }
 }
