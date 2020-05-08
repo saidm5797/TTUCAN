@@ -2,6 +2,8 @@
 
 ## CAN bus protocol for TTU Vehicle Simulator.
 
+***Please begin by reading the CAN Plan pdf included in this repository for a more detailed description of the software.***
+
 This Library is compatible for the Arduino Mega 2560
 
 This implementation requires MCP_CAN_lib and TTU_IsoTp:
