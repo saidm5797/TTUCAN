@@ -259,7 +259,9 @@ int TTUCAN::send_Msg(INT32U msgID, INT8U rtr, INT8U *data, INT32U len){
   TxMsg.Buffer=(uint8_t *)calloc(MAX_MSGBUF,sizeof(uint8_t));
   TxMsg.tx_id=msgID;
   memcpy(TxMsg.Buffer,data,sizeof(data));
+#ifdef TTU_DEBUG
   Serial.println(F("Send..."));
+#endif
   send(&TxMsg); 
 #else
   if(len > 8){
@@ -268,10 +270,14 @@ int TTUCAN::send_Msg(INT32U msgID, INT8U rtr, INT8U *data, INT32U len){
   }
   byte sndStat = sendMsgBuf(msgID, len, data);
   if(sndStat == CAN_OK){
+#ifdef TTU_DEBUG	  
 	Serial.println("Message Sent Successfully!");
+#endif  
     return 1;
   } else {
+#ifdef TTU_DEBUG  
 	Serial.println("Error Sending Message...");
+#endif  
 	return 0;
   }
 #endif
@@ -293,10 +299,14 @@ int TTUCAN::receive_Msg(INT32U *id, INT8U *len, INT8U *buf){
 		byte data[] = {0xFF};
 		byte sndStat = sendMsgBuf(pingResponse, 1, data); //send msg, len = 1
 		if(sndStat == CAN_OK){
+#ifdef TTU_DEBUG
 			Serial.println("Ping Response Sent Successfully!");
+#endif
 			return 1;
 		} else {
+#ifdef TTU_DEBUG
 			Serial.println("Error Sending Message...");
+#endif
 			return 0;
 		}
 	}
@@ -314,10 +324,14 @@ int TTUCAN::receive_Msg(INT32U *id, INT8U *len, INT8U *buf){
 		byte data[] = {0xFF};
 		byte sndStat = sendMsgBuf(pingResponse, 1, data); //send msg, len = 1
 		if(sndStat == CAN_OK){
+#ifdef TTU_DEBUG
 			Serial.println("Ping Response Sent Successfully!");
+#endif
 			return 1;
 		} else {
+#ifdef TTU_DEBUG
 			Serial.println("Error Sending Message...");
+#endif
 			return 0;
 		}
 	}
