@@ -61,9 +61,9 @@ INT32U preProcess(byte *data, INT32U to_addr, INT32U descriptor){
     case 0:
       //reset data array to all zeros
       memset(data,0,sizeof(data)); 
-      //begin filling data array
-	  _size = sizeof(temp);
+      //begin filling data array  
       memcpy(data, (byte *)&temp, sizeof(temp));
+      _size = sizeof(temp);	  
       memcpy((data+_size), (byte *)&count, sizeof(count));
       _size += sizeof(count);
       memcpy((data+_size), (byte *)&speed_, sizeof(speed_));
@@ -74,8 +74,8 @@ INT32U preProcess(byte *data, INT32U to_addr, INT32U descriptor){
       //reset data array to all zeros
       memset(data,0,sizeof(data)); 
       //begin filling data array
-      _size = sizeof(temp);
       memcpy(data, (byte *)&temp, sizeof(temp));
+      _size = sizeof(temp);	  
       memcpy((data+_size), (byte *)&count, sizeof(count));
       _size += sizeof(count);
       memcpy((data+_size), (byte *)&speed_, sizeof(speed_));
@@ -95,8 +95,8 @@ void postProcess(byte *data, INT32U receiveID){
   int _size;
   switch(receiveID){
     case 0: 
-      _size = sizeof(temp); //starting index of data array
       memcpy(&temp, data, sizeof(temp));
+      _size = sizeof(temp); //starting index of data array	  
       memcpy(&count, (data +_size), sizeof(count));
       _size +=sizeof(count); //increment index of array by size of count to access the next variable
       memcpy(&speed_, (data +_size), sizeof(speed_));
@@ -109,8 +109,8 @@ void postProcess(byte *data, INT32U receiveID){
       Serial.println(length_);
       break;
     default:
-      _size = sizeof(temp);
       memcpy(&temp, data, sizeof(temp));
+      _size = sizeof(temp);
       memcpy(&count, (data +_size), sizeof(count));
       _size +=sizeof(count);
       memcpy(&speed_, (data +_size), sizeof(speed_));
