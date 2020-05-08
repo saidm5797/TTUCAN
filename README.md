@@ -32,7 +32,7 @@ The arguments are the node address whose messages to receive, and the filter reg
 
  
 
-It is up to the user to decide what message IDs to use for each type of information based on the guidelines mentioned above. It is necessary to know what messages a node will be sending and receiving before runtime so that the data being transmitted can be processed accordingly. Use the **display_IDs** example to see a list of all message IDs that a node can send and receive from other nodes. This will help in planning communication between nodes. 
+It is up to the user to decide what message IDs to use for each type of information based on the guidelines described in the CAN Plan file. It is necessary to know what messages a node will be sending and receiving before runtime so that the data being transmitted can be processed accordingly. Use the **display_IDs** example to see a list of all message IDs that a node can send and receive from other nodes. This will help in planning communication between nodes. 
 
  
 
